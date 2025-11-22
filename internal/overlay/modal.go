@@ -7,7 +7,6 @@ import (
 
 type ModalModel interface {
 	tea.Model
-	OverlayTitle() string
 	Size() (width, height int)
 }
 

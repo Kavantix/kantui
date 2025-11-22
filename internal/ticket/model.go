@@ -29,6 +29,14 @@ type Model struct {
 var _ overlay.ModalModel = Model{}
 var _ overlay.Sizeable = Model{}
 
+var idStyle = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("69")).
+	Bold(true)
+
+func IdStyle() lipgloss.Style {
+	return idStyle
+}
+
 func NewModel(store Store) Model {
 	titleInput := textinput.New()
 	titleInput.Focus()
@@ -158,17 +166,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-func (m Model) OverlayTitle() string {
+func (m Model) modalTitle() string {
+	titleBuilder := strings.Builder{}
 	if !m.ticket.ID.IsValid() {
-		return "New"
+		return "New ticket"
 	} else {
-		return string(m.ticket.Title)
+		titleBuilder.WriteString(idStyle.Render(m.ticket.ID.String()))
+		titleBuilder.WriteRune(' ')
+		titleBuilder.WriteString(string(m.ticket.Title))
+		return titleBuilder.String()
 	}
 }
 
 var ticketStyle = lipgloss.NewStyle().
 	Border(lipgloss.RoundedBorder()).
-	BorderForeground(lipgloss.Color("63")).
+	BorderForeground(lipgloss.Color("62")).
 	Padding(1)
 
 func (m Model) View() string {
@@ -185,6 +197,7 @@ func (m Model) View() string {
 		"Description",
 		m.descriptionInput.View(),
 	)
-	return ticketStyle.Render(content)
+	result := ticketStyle.Render(content)
 
+	return overlay.Place(4, 0, m.modalTitle(), result, false)
 }

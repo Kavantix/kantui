@@ -41,10 +41,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) OverlayTitle() string {
-	return "Confirm"
-}
-
 // Size implements overlay.ModalModel.
 func (m Model) Size() (width int, height int) {
 	styleWidth, styleHeight := confirmStyle.GetFrameSize()
@@ -54,9 +50,11 @@ func (m Model) Size() (width int, height int) {
 
 var confirmStyle = lipgloss.NewStyle().
 	Border(lipgloss.RoundedBorder()).
-	BorderForeground(lipgloss.Color("63")).
+	BorderForeground(lipgloss.Color("62")).
 	Padding(1, 2)
 
 func (m Model) View() string {
-	return confirmStyle.Render(m.question + " (y/n)")
+	content := m.question
+	result := confirmStyle.Render(content)
+	return overlay.Place(4, 0, "Confirm (y/n)", result, false)
 }

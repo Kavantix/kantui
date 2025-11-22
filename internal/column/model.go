@@ -1,6 +1,8 @@
 package column
 
 import (
+	"strings"
+
 	"github.com/Kavantix/kantui/internal/confirm"
 	"github.com/Kavantix/kantui/internal/ticket"
 	"github.com/charmbracelet/bubbles/list"
@@ -22,12 +24,8 @@ type item struct {
 	ticket ticket.Ticket
 }
 
-var idStyle = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("63")).
-	Bold(true)
-
 func (i item) Title() string {
-	return string(i.ticket.Title) + " " + idStyle.Render(i.ticket.ID.String())
+	return string(i.ticket.Title) + " " + ticket.IdStyle().Render(i.ticket.ID.String())
 }
 func (i item) Description() string { return string(i.ticket.Description) }
 func (i item) FilterValue() string { return string(i.ticket.Title) }
@@ -80,7 +78,8 @@ func (m Model) IsCapturingInput() bool {
 
 var (
 	style = lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder())
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("239"))
 )
 
 func (m Model) SetSize(width, height int) {
@@ -117,7 +116,11 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			if !ok {
 				return m, nil
 			}
-			return m, confirm.Show("Are you sure you want to delete?", m.store.DeleteTicket(item.ticket.ID))
+			msgBuilder := strings.Builder{}
+			msgBuilder.WriteString("Are you sure you want to delete ")
+			msgBuilder.WriteString(ticket.IdStyle().Render(item.ticket.ID.String()))
+			msgBuilder.WriteRune('?')
+			return m, confirm.Show(msgBuilder.String(), m.store.DeleteTicket(item.ticket.ID))
 		case "e":
 			item, ok := m.list.SelectedItem().(item)
 			if !ok {
@@ -147,7 +150,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 func (m Model) View() string {
 	borderColor := style.GetBorderTopForeground()
 	if m.focused {
-		borderColor = lipgloss.Color("63")
+		borderColor = lipgloss.Color("13")
 		m.delegate.Styles.SelectedTitle = defaultStyles.SelectedTitle
 		m.delegate.Styles.SelectedDesc = defaultStyles.SelectedDesc
 	} else {
