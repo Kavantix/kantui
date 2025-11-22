@@ -25,12 +25,16 @@ type Model struct {
 	overlay      overlay.Model
 
 	criticalFailure messages.CriticalFailureMsg
+
+	remigrateCount int
 }
 
 var _ tea.Model = Model{}
 
-func New() Model {
-	m := Model{}
+func New(remigrateCount int) Model {
+	m := Model{
+		remigrateCount: remigrateCount,
+	}
 	return m
 }
 
@@ -41,7 +45,7 @@ type LoadedMsg struct {
 // Init implements tea.Model.
 func (m Model) Init() tea.Cmd {
 	return func() tea.Msg {
-		err := database.Migrate()
+		err := database.Migrate(m.remigrateCount)
 		if err != nil {
 			return messages.CriticalFailureMsg{
 				Err:          err,

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log/slog"
 	"os"
@@ -10,12 +11,16 @@ import (
 	zone "github.com/lrstanley/bubblezone"
 )
 
+var remigrateCount = flag.Int("remigrate", 0, "the amount of migrations to down before running up migrations")
+
 func main() {
 	zone.NewGlobal()
 	defer zone.Close()
 
+	flag.Parse()
+
 	program := tea.NewProgram(
-		app.New(),
+		app.New(max(0, *remigrateCount)),
 		tea.WithAltScreen(),
 		tea.WithMouseAllMotion(),
 	)
