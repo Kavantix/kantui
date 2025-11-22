@@ -108,8 +108,11 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		}
 		switch msg.String() {
 		case "esc":
+			if m.list.IsFiltered() {
+				m.list.ResetFilter()
+			}
 			return m, nil
-		case "n":
+		case "c":
 			return m, ticket.CreateTicket(m.store)
 		case "d":
 			item, ok := m.list.SelectedItem().(item)
@@ -121,7 +124,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			msgBuilder.WriteString(ticket.IdStyle().Render(item.ticket.ID.String()))
 			msgBuilder.WriteRune('?')
 			return m, confirm.Show(msgBuilder.String(), m.store.DeleteTicket(item.ticket.ID))
-		case "e":
+		case "e", " ":
 			item, ok := m.list.SelectedItem().(item)
 			if !ok {
 				return m, nil
@@ -133,7 +136,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				return m, nil
 			}
 			return m, m.store.MoveToPreviousStatus(item.ticket.ID)
-		case " ":
+		case "n":
 			item, ok := m.list.SelectedItem().(item)
 			if !ok {
 				return m, nil
