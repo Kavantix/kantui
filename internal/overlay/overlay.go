@@ -1,24 +1,14 @@
-package app
+package overlay
 
 import (
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	charmansi "github.com/charmbracelet/x/ansi"
 	"github.com/muesli/ansi"
 	"github.com/muesli/reflow/truncate"
 	"github.com/muesli/termenv"
 )
-
-type ModalModel interface {
-	tea.Model
-	OverlayTitle() string
-}
-
-type Sizeable[T any] interface {
-	SetSize(width, height int) T
-}
 
 // Most of this code is borrowed from
 // https://github.com/charmbracelet/lipgloss/pull/102
@@ -39,8 +29,8 @@ func getLines(s string) (lines []string, widest int) {
 	return lines, widest
 }
 
-// PlaceOverlay places fg on top of bg.
-func PlaceOverlay(
+// Place places fg on top of bg.
+func Place(
 	x, y int,
 	fg, bg string,
 	shadow bool, opts ...WhitespaceOption,
@@ -63,7 +53,7 @@ func PlaceOverlay(
 			}
 		}
 
-		fg = PlaceOverlay(0, 0, fg, shadowbg, false, opts...)
+		fg = Place(0, 0, fg, shadowbg, false, opts...)
 		fgLines, fgWidth = getLines(fg)
 		fgHeight = len(fgLines)
 	}
@@ -170,6 +160,12 @@ func (w whitespace) render(width int) string {
 	}
 
 	return w.style.Styled(b.String())
+}
+
+var dimmBackgroundStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+
+func DimmBackground(bg string) string {
+	return dimmBackgroundStyle.Render(charmansi.Strip(bg))
 }
 
 // WhitespaceOption sets a styling rule for rendering whitespace.

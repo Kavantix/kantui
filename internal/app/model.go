@@ -7,11 +7,11 @@ import (
 	"github.com/Kavantix/kantui/internal/column"
 	"github.com/Kavantix/kantui/internal/database"
 	"github.com/Kavantix/kantui/internal/messages"
+	"github.com/Kavantix/kantui/internal/overlay"
 	"github.com/Kavantix/kantui/internal/ticket"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	charmansi "github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone"
 )
 
@@ -242,15 +242,15 @@ func (m Model) View() string {
 			modal.SetSize(width, height)
 		}
 
-		overlay := lipgloss.NewStyle().
+		modalContent := lipgloss.NewStyle().
 			Width(width).MaxWidth(width).
 			Height(height).MaxHeight(height).
 			Render(modal.View())
-		overlay = style.Render(overlay)
+		modalContent = style.Render(modalContent)
 
-		return zone.Scan(PlaceOverlay(
+		return zone.Scan(overlay.Place(
 			horizontalMargin, verticalMargin,
-			overlay, lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render(charmansi.Strip(board)),
+			modalContent, overlay.DimmBackground(board),
 			false,
 		))
 	} else {
