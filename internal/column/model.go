@@ -163,44 +163,46 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		case "J", "shift+down":
 			visibleItems := m.list.VisibleItems()
 			index := m.list.Index()
-			if index < 0 || index >= len(visibleItems)-1 {
-				return m, nil
-			}
-			ticket := visibleItems[index].(item).ticket
-			nextTicket := visibleItems[index+1].(item).ticket
-			return m, m.store.RankTicketAfterTicket(ticket.ID, nextTicket.ID)
+			newIndex := index + 1
+			return m.rankDown(index, newIndex, visibleItems)
 		case "B":
 			visibleItems := m.list.VisibleItems()
 			index := m.list.Index()
-			if index >= len(visibleItems)-1 {
-				return m, nil
-			}
-			ticket := visibleItems[index].(item).ticket
-			afterTicket := visibleItems[len(visibleItems)-1].(item).ticket
-			return m, m.store.RankTicketAfterTicket(ticket.ID, afterTicket.ID)
+			newIndex := len(visibleItems) - 1
+			return m.rankDown(index, newIndex, visibleItems)
 		case "K", "shift+up":
 			visibleItems := m.list.VisibleItems()
 			index := m.list.Index()
-			if index < 1 || index > len(visibleItems)-1 {
-				return m, nil
-			}
-			ticket := visibleItems[index].(item).ticket
-			previousTicket := visibleItems[index-1].(item).ticket
-			return m, m.store.RankTicketBeforeTicket(ticket.ID, previousTicket.ID)
+			newIndex := index - 1
+			return m.rankUp(index, newIndex, visibleItems)
 		case "T":
-			index := m.list.Index()
-			if index <= 0 {
-				return m, nil
-			}
 			visibleItems := m.list.VisibleItems()
-			ticket := visibleItems[index].(item).ticket
-			beforeTicket := visibleItems[0].(item).ticket
-			return m, m.store.RankTicketBeforeTicket(ticket.ID, beforeTicket.ID)
+			index := m.list.Index()
+			newIndex := 0
+			return m.rankUp(index, newIndex, visibleItems)
 		}
 	}
 	newListModel, cmd := m.list.Update(msg)
 	m.list = &newListModel
 	return m, cmd
+}
+
+func (m Model) rankUp(index int, newIndex int, visibleItems []list.Item) (Model, tea.Cmd) {
+	if index == newIndex || newIndex < 0 || index > len(visibleItems)-1 {
+		return m, nil
+	}
+	ticket := visibleItems[index].(item).ticket
+	previousTicket := visibleItems[newIndex].(item).ticket
+	return m, m.store.RankTicketBeforeTicket(ticket.ID, previousTicket.ID)
+}
+
+func (m Model) rankDown(index int, newIndex int, visibleItems []list.Item) (Model, tea.Cmd) {
+	if index == newIndex || index < 0 || newIndex > len(visibleItems)-1 {
+		return m, nil
+	}
+	ticket := visibleItems[index].(item).ticket
+	nextTicket := visibleItems[newIndex].(item).ticket
+	return m, m.store.RankTicketAfterTicket(ticket.ID, nextTicket.ID)
 }
 
 // View implements tea.Model.

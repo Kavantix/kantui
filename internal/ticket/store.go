@@ -3,6 +3,7 @@ package ticket
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"slices"
 
@@ -192,96 +193,118 @@ func (s *store) UpdateStatus(id TicketId, newStatus Status) tea.Cmd {
 
 func (s *store) RankTicketAfterTicket(id, afterId TicketId) tea.Cmd {
 	return func() tea.Msg {
-		index := slices.IndexFunc(s.tickets, func(ticket Ticket) bool { return ticket.ID == id })
-		afterIndex := slices.IndexFunc(s.tickets, func(ticket Ticket) bool { return ticket.ID == afterId })
+		index := s.indexOfTicket(id)
+		afterIndex := s.indexOfTicket(afterId)
+		if afterIndex < 0 || index < 0 {
+			return nil
+		}
 		if index >= afterIndex {
 			return messages.CriticalFailureMsg{
 				Err: fmt.Errorf("Ranking after should only be used when ticket is not already after other ticket"),
 			}
 		}
-		if afterIndex < 0 || index < 0 {
-			return nil
-		}
-		ticket := s.tickets[index]
-		afterTicket := s.tickets[afterIndex]
-
-		var newRank int64
-		if afterIndex == len(s.tickets)-1 {
-			newRank = afterTicket.rank + 1_000_000
-		} else {
-			nextTicket := s.tickets[afterIndex+1]
-			gap := nextTicket.rank - afterTicket.rank
-			if gap <= 1 {
-				return messages.CriticalFailureMsg{
-					Err:          fmt.Errorf("ran out of room between tickets"),
-					FriendlyText: "Failed to update rank",
-				}
-			}
-			newRank = afterTicket.rank + gap/2
-		}
-
-		err := s.queries.UpdateRank(context.Background(), database.UpdateRankParams{
-			ID:   id.number,
-			Rank: newRank,
-		})
-		if err != nil {
-			return messages.CriticalFailureMsg{
-				Err:          err,
-				FriendlyText: "Failed to update rank",
-			}
-		}
-		ticket.rank = newRank
-		s.tickets = slices.Insert(s.tickets, afterIndex+1, ticket)
-		s.tickets = slices.Delete(s.tickets, index, index+1)
-		return TicketsUpdatedMsg{s.tickets}
+		return s.rankTicket(index, afterIndex+1)
 	}
 }
 
 func (s *store) RankTicketBeforeTicket(id, beforeId TicketId) tea.Cmd {
 	return func() tea.Msg {
-		index := slices.IndexFunc(s.tickets, func(ticket Ticket) bool { return ticket.ID == id })
-		beforeIndex := slices.IndexFunc(s.tickets, func(ticket Ticket) bool { return ticket.ID == beforeId })
+		index := s.indexOfTicket(id)
+		beforeIndex := s.indexOfTicket(beforeId)
+		if beforeIndex < 0 || index < 0 {
+			return nil
+		}
 		if index <= beforeIndex {
 			return messages.CriticalFailureMsg{
 				Err: fmt.Errorf("Ranking before should only be used when ticket is not already before other ticket"),
 			}
 		}
-		if beforeIndex < 0 || index < 0 {
-			return nil
-		}
-		ticket := s.tickets[index]
-		beforeTicket := s.tickets[beforeIndex]
-
-		var newRank int64
-		if beforeIndex == 0 {
-			newRank = beforeTicket.rank - 1_000_000
-		} else {
-			previousTicket := s.tickets[beforeIndex-1]
-			gap := beforeTicket.rank - previousTicket.rank
-			if gap <= 1 {
-				return messages.CriticalFailureMsg{
-					Err:          fmt.Errorf("ran out of room between tickets"),
-					FriendlyText: "Failed to update rank",
-				}
-			}
-			newRank = beforeTicket.rank - gap/2
-		}
-
-		err := s.queries.UpdateRank(context.Background(), database.UpdateRankParams{
-			ID:   id.number,
-			Rank: newRank,
-		})
-		if err != nil {
-			return messages.CriticalFailureMsg{
-				Err:          err,
-				FriendlyText: "Failed to update rank",
-			}
-		}
-		ticket.rank = newRank
-		s.tickets = slices.Delete(s.tickets, index, index+1)
-		s.tickets = slices.Insert(s.tickets, beforeIndex, ticket)
-		return TicketsUpdatedMsg{s.tickets}
+		return s.rankTicket(index, beforeIndex)
 	}
+}
+
+func (s *store) indexOfTicket(id TicketId) int {
+	return slices.IndexFunc(s.tickets, func(ticket Ticket) bool { return ticket.ID == id })
+}
+
+func (s *store) rankTicket(currentIndex, newIndex int) tea.Msg {
+	if currentIndex == newIndex {
+		return nil
+	}
+
+	newRank, err := s.computeNewRank(currentIndex, newIndex)
+	if err != nil {
+		return messages.CriticalFailureMsg{
+			Err:          err,
+			FriendlyText: "Failed to update rank",
+		}
+	}
+
+	ticket := s.tickets[currentIndex]
+
+	// Update database
+	err = s.queries.UpdateRank(context.Background(), database.UpdateRankParams{
+		ID:   ticket.ID.number,
+		Rank: newRank,
+	})
+	if err != nil {
+		return messages.CriticalFailureMsg{
+			Err:          err,
+			FriendlyText: "Failed to update rank",
+		}
+	}
+
+	// Update loaded tickets
+	ticket.rank = newRank
+	if newIndex > currentIndex {
+		s.tickets = slices.Insert(s.tickets, newIndex, ticket)
+		s.tickets = slices.Delete(s.tickets, currentIndex, currentIndex+1)
+	} else {
+		s.tickets = slices.Delete(s.tickets, currentIndex, currentIndex+1)
+		s.tickets = slices.Insert(s.tickets, newIndex, ticket)
+	}
+
+	return TicketsUpdatedMsg{s.tickets}
+}
+
+func (s *store) computeNewRank(currentIndex, newIndex int) (int64, error) {
+	if currentIndex == newIndex {
+		return 0, errors.New("current and new index are the same")
+	}
+	if currentIndex < 0 || currentIndex >= len(s.tickets) || newIndex < 0 || newIndex > len(s.tickets) {
+		return 0, fmt.Errorf("invalid indices: currentIndex=%d, newIndex=%d", currentIndex, newIndex)
+	}
+
+	// Determine the ticket to compare to
+	var comparisonTicket Ticket
+	if newIndex > currentIndex {
+		comparisonTicket = s.tickets[newIndex-1]
+	} else {
+		comparisonTicket = s.tickets[newIndex]
+	}
+
+	// Compute new rank
+	var newRank int64
+	if newIndex == 0 {
+		newRank = comparisonTicket.rank - 1_000_000
+	} else if newIndex >= len(s.tickets) {
+		newRank = comparisonTicket.rank + 1_000_000
+	} else {
+		var gap int64
+		if newIndex > currentIndex {
+			gap = s.tickets[newIndex].rank - comparisonTicket.rank
+			newRank = comparisonTicket.rank + gap/2
+		} else {
+			gap = comparisonTicket.rank - s.tickets[newIndex-1].rank
+			newRank = comparisonTicket.rank - gap/2
+		}
+
+		if gap <= 1 {
+			return 0, fmt.Errorf("ran out of room between tickets")
+		}
+	}
+
+	return newRank, nil
 }
 
 func (s *store) MoveToPreviousStatus(id TicketId) tea.Cmd {
