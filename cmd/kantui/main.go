@@ -7,11 +7,18 @@ import (
 
 	"github.com/Kavantix/kantui/internal/model"
 	tea "github.com/charmbracelet/bubbletea"
+	zone "github.com/lrstanley/bubblezone"
 )
 
 func main() {
+	zone.NewGlobal()
+	defer zone.Close()
 
-	program := tea.NewProgram(model.New())
+	program := tea.NewProgram(
+		model.New(),
+		tea.WithAltScreen(),
+		tea.WithMouseAllMotion(),
+	)
 
 	f, err := tea.LogToFile("debug.log", "debug")
 	if err != nil {

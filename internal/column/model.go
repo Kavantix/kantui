@@ -1,34 +1,45 @@
 package column
 
 import (
+	"github.com/Kavantix/kantui/internal/ticket"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
 type Model struct {
-	focussed bool
-	list     *list.Model
+	store ticket.Store
+
+	delegate *list.DefaultDelegate
+
+	status  ticket.Status
+	focused bool
+	list    *list.Model
 }
 
 type item struct {
-	title, desc string
+	ticket ticket.Ticket
 }
 
-func (i item) Title() string       { return i.title }
-func (i item) Description() string { return i.desc }
-func (i item) FilterValue() string { return i.title }
+func (i item) Title() string       { return i.ticket.Title }
+func (i item) Description() string { return i.ticket.Description }
+func (i item) FilterValue() string { return i.ticket.Title }
 
-func New(title string) Model {
+var defaultStyles = list.NewDefaultItemStyles()
+
+func New(status ticket.Status, store ticket.Store) Model {
+	delegate := list.NewDefaultDelegate()
 	listModel := list.New(
-		[]list.Item{
-			item{title: "test", desc: "This is a test"},
-		},
-		list.NewDefaultDelegate(), 0, 0,
+		[]list.Item{},
+		&delegate, 0, 0,
 	)
-	listModel.Title = title
+	listModel.SetShowHelp(false)
+	listModel.Title = status.ColumnTitle()
 	m := Model{
-		list: &listModel,
+		delegate: &delegate,
+		store:    store,
+		status:   status,
+		list:     &listModel,
 	}
 
 	return m
@@ -40,15 +51,15 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m *Model) Focus() {
-	m.focussed = true
+	m.focused = true
 }
 
 func (m *Model) Unfocus() {
-	m.focussed = false
+	m.focused = false
 }
 
-func (m Model) Focussed() bool {
-	return m.focussed
+func (m Model) Focused() bool {
+	return m.focused
 }
 
 func (m Model) IsCapturingInput() bool {
@@ -65,15 +76,49 @@ func (m Model) SetSize(width, height int) {
 	m.list.SetSize(width-styleX, height-styleY)
 }
 
+func (m Model) setTickets(tickets []ticket.Ticket) tea.Cmd {
+	return func() tea.Msg {
+		var items []list.Item
+		for _, ticket := range tickets {
+			if ticket.Status == m.status {
+				items = append(items, item{ticket: ticket})
+			}
+		}
+		cmd := m.list.SetItems(items)
+		if cmd != nil {
+			return cmd()
+		} else {
+			return 1
+		}
+	}
+}
+
 // Update implements tea.Model.
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case ticket.TicketsUpdatedMsg:
+		return m, m.setTickets(msg.Tickets)
 	case tea.KeyMsg:
+		if m.IsCapturingInput() {
+			break
+		}
 		switch msg.String() {
 		case "esc":
-			if !m.IsCapturingInput() {
+			return m, nil
+		case "n":
+			return m, ticket.CreateTicket(m.store)
+		case "b":
+			item, ok := m.list.SelectedItem().(item)
+			if !ok {
 				return m, nil
 			}
+			return m, m.store.MoveToPreviousStatus(item.ticket.ID)
+		case " ":
+			item, ok := m.list.SelectedItem().(item)
+			if !ok {
+				return m, nil
+			}
+			return m, m.store.MoveToNextStatus(item.ticket.ID)
 		}
 	}
 	newListModel, cmd := m.list.Update(msg)
@@ -84,11 +129,17 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 // View implements tea.Model.
 func (m Model) View() string {
 	borderColor := style.GetBorderTopForeground()
-	if m.focussed {
+	if m.focused {
 		borderColor = lipgloss.Color("63")
+		m.delegate.Styles.SelectedTitle = defaultStyles.SelectedTitle
+		m.delegate.Styles.SelectedDesc = defaultStyles.SelectedDesc
+	} else {
+		m.delegate.Styles.SelectedTitle = defaultStyles.NormalTitle
+		m.delegate.Styles.SelectedDesc = defaultStyles.NormalDesc
 	}
 	return style.
 		Width(m.list.Width()).
+		Height(m.list.Height()).
 		BorderForeground(borderColor).
 		Render(m.list.View())
 }
