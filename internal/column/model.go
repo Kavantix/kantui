@@ -22,7 +22,13 @@ type item struct {
 	ticket ticket.Ticket
 }
 
-func (i item) Title() string       { return string(i.ticket.Title) }
+var idStyle = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("63")).
+	Bold(true)
+
+func (i item) Title() string {
+	return string(i.ticket.Title) + " " + idStyle.Render(i.ticket.ID.String())
+}
 func (i item) Description() string { return string(i.ticket.Description) }
 func (i item) FilterValue() string { return string(i.ticket.Title) }
 
@@ -36,6 +42,12 @@ func New(status ticket.Status, store ticket.Store) Model {
 	)
 	listModel.SetShowHelp(false)
 	listModel.Title = status.ColumnTitle()
+	switch status {
+	case ticket.InProgress:
+		listModel.Styles.Title = listModel.Styles.Title.Background(lipgloss.Color("4"))
+	case ticket.Done:
+		listModel.Styles.Title = listModel.Styles.Title.Background(lipgloss.Color("2"))
+	}
 	m := Model{
 		delegate: &delegate,
 		store:    store,
@@ -77,20 +89,13 @@ func (m Model) SetSize(width, height int) {
 }
 
 func (m Model) setTickets(tickets []ticket.Ticket) tea.Cmd {
-	return func() tea.Msg {
-		var items []list.Item
-		for _, ticket := range tickets {
-			if ticket.Status == m.status {
-				items = append(items, item{ticket: ticket})
-			}
-		}
-		cmd := m.list.SetItems(items)
-		if cmd != nil {
-			return cmd()
-		} else {
-			return 1
+	var items []list.Item
+	for _, ticket := range tickets {
+		if ticket.Status == m.status {
+			items = append(items, item{ticket: ticket})
 		}
 	}
+	return m.list.SetItems(items)
 }
 
 // Update implements tea.Model.

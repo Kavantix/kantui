@@ -1,9 +1,10 @@
 -- +goose Up
 -- +goose StatementBegin
 CREATE TABLE tickets (
-  id   INTEGER PRIMARY KEY,
-  title text    NOT NULL,
-  description  text
+  id          integer primary key autoincrement,
+  status      text not null default 'TODO',
+  title       text not null,
+  description text
 );
 
 -- +goose StatementEnd
