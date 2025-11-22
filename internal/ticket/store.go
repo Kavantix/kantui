@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"slices"
 
 	"github.com/Kavantix/kantui/internal/database"
 	"github.com/Kavantix/kantui/internal/messages"
@@ -69,6 +70,7 @@ type Store interface {
 	UpdateStatus(id TicketId, newStatus Status) tea.Cmd
 	MoveToNextStatus(id TicketId) tea.Cmd
 	MoveToPreviousStatus(id TicketId) tea.Cmd
+	DeleteTicket(id TicketId) tea.Cmd
 }
 
 type store struct {
@@ -236,4 +238,20 @@ func (s *store) MoveToNextStatus(id TicketId) tea.Cmd {
 	}
 
 	return s.UpdateStatus(id, newStatus)
+}
+
+func (s *store) DeleteTicket(id TicketId) tea.Cmd {
+	return func() tea.Msg {
+		err := s.queries.DeleteTicket(context.Background(), id.number)
+		if err != nil {
+			return messages.CriticalFailureMsg{
+				Err:          err,
+				FriendlyText: "Failed to delete ticket",
+			}
+		}
+		s.tickets = slices.DeleteFunc(s.tickets, func(ticket Ticket) bool {
+			return ticket.ID == id
+		})
+		return TicketsUpdatedMsg{s.tickets}
+	}
 }

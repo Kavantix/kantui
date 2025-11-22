@@ -2,8 +2,12 @@ package ticket
 
 import (
 	"fmt"
+	"log/slog"
+	"strings"
 
+	"github.com/Kavantix/kantui/internal/confirm"
 	"github.com/Kavantix/kantui/internal/messages"
+	"github.com/Kavantix/kantui/internal/overlay"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -17,9 +21,13 @@ type Model struct {
 	height int
 
 	ticket           Ticket
-	titleInput       textinput.Model
+	titleInput       *textinput.Model
 	descriptionInput textarea.Model
 }
+
+// assert
+var _ overlay.ModalModel = Model{}
+var _ overlay.Sizeable = Model{}
 
 func NewModel(store Store) Model {
 	titleInput := textinput.New()
@@ -32,7 +40,7 @@ func NewModel(store Store) Model {
 	descriptionInput.Prompt = ""
 	return Model{
 		store:            store,
-		titleInput:       titleInput,
+		titleInput:       &titleInput,
 		descriptionInput: descriptionInput,
 	}
 }
@@ -44,16 +52,51 @@ func (m *Model) EditTicket(ticket Ticket) {
 }
 
 func (m Model) SetSize(width, height int) tea.Model {
+	styleWidth, styleHeight := ticketStyle.GetFrameSize()
 	m.width = width
 	m.height = height
-	m.titleInput.Width = width
+	width -= styleWidth + 2
+	height -= styleHeight
+	titleWidth := width - 2
+	if titleWidth != m.titleInput.Width {
+		slog.Info("Setting size", slog.Int("width", width), slog.Int("height", height))
+		newTitleInput := textinput.New()
+		if m.titleInput.Focused() {
+			newTitleInput.Focus()
+		}
+		newTitleInput.SetValue(m.titleInput.Value())
+		newTitleInput.Width = titleWidth
+		newTitleInput.Placeholder = m.titleInput.Placeholder
+		m.titleInput = &newTitleInput
+	}
 	m.descriptionInput.SetWidth(width)
 	m.descriptionInput.SetHeight(height - 2)
 	return m
 }
 
+func (m Model) Size() (width int, height int) {
+	return m.width, m.height
+}
+
 func (m Model) Init() tea.Cmd {
 	return nil
+}
+
+func (m Model) ticketTitle() TicketTitle {
+	value := strings.TrimSpace(m.titleInput.Value())
+	return TicketTitle(value)
+}
+
+func (m Model) ticketDescription() TicketDescription {
+	value := strings.TrimSpace(m.descriptionInput.Value())
+	return TicketDescription(value)
+}
+
+func (m Model) hasChanged() bool {
+	if !m.ticket.ID.IsValid() {
+		return m.ticketTitle() != "" || m.ticketDescription() != ""
+	}
+	return m.ticketTitle() != m.ticket.Title || m.ticketDescription() != m.ticket.Description
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -61,6 +104,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "esc":
+			if m.hasChanged() {
+				return m, confirm.Show("Are you sure you want to exit editing?", messages.CloseModal)
+			}
 			return m, messages.CloseModal
 		case "ctrl+c":
 			return m, messages.Quit
@@ -89,14 +135,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				save = m.store.UpdateTicket(
 					m.ticket.ID,
 					m.ticket.Status,
-					TicketTitle(m.titleInput.Value()),
-					TicketDescription(m.descriptionInput.Value()),
+					m.ticketTitle(),
+					m.ticketDescription(),
 				)
 			} else {
-				save = m.store.New(
-					TicketTitle(m.titleInput.Value()),
-					TicketDescription(m.descriptionInput.Value()),
-				)
+				save = m.store.New(m.ticketTitle(), m.ticketDescription())
 			}
 
 			return m, tea.Batch(save, messages.CloseModal)
@@ -106,7 +149,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 
-	m.titleInput, cmd = m.titleInput.Update(msg)
+	newTitleInput, cmd := m.titleInput.Update(msg)
+	m.titleInput = &newTitleInput
 	cmds = append(cmds, cmd)
 	m.descriptionInput, cmd = m.descriptionInput.Update(msg)
 	cmds = append(cmds, cmd)
@@ -122,7 +166,10 @@ func (m Model) OverlayTitle() string {
 	}
 }
 
-var ticketStyle = lipgloss.NewStyle()
+var ticketStyle = lipgloss.NewStyle().
+	Border(lipgloss.RoundedBorder()).
+	BorderForeground(lipgloss.Color("63")).
+	Padding(1)
 
 func (m Model) View() string {
 	if m.titleInput.Focused() {
@@ -132,11 +179,12 @@ func (m Model) View() string {
 		m.titleInput.TextStyle = m.descriptionInput.BlurredStyle.Text
 		m.titleInput.PromptStyle = m.descriptionInput.BlurredStyle.Text
 	}
-	return ticketStyle.Render(lipgloss.JoinVertical(
+	content := lipgloss.JoinVertical(
 		lipgloss.Left,
 		m.titleInput.View(),
 		"Description",
 		m.descriptionInput.View(),
-	))
+	)
+	return ticketStyle.Render(content)
 
 }

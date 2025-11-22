@@ -22,7 +22,7 @@ type Model struct {
 	windowHeight int
 	quitting     bool
 	columns      []column.Model
-	modals       []ModalModel
+	modals       []overlay.ModalModel
 
 	criticalFailure messages.CriticalFailureMsg
 }
@@ -95,6 +95,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
+	case overlay.ModalModel:
+		m.modals = append(m.modals, msg)
+		return m, nil
 	case tea.MouseMsg:
 		for i := 0; i < len(m.columns); i++ {
 			if zone.Get(fmt.Sprintf("column-%d", i)).InBounds(msg) {
@@ -129,14 +132,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		i := len(m.modals) - 1
 		model, cmd := m.modals[i].Update(msg)
-		m.modals[i] = model.(ModalModel)
+		m.modals[i] = model.(overlay.ModalModel)
 		return m, cmd
 	}
 
 	switch msg := msg.(type) {
-	case ModalModel:
-		m.modals = append(m.modals, msg)
-		return m, nil
 
 	case messages.QuitMsg:
 		slog.Info("Quitting")
@@ -229,31 +229,25 @@ func (m Model) View() string {
 		columns...,
 	)
 
-	if len(m.modals) > 0 {
-		style := lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("63"))
-		verticalMargin := 1
+	result := board
+	for i, modal := range m.modals {
 		horizontalMargin := 2
+		verticalMargin := 1
 
-		styleWidth, styleHeight := style.GetFrameSize()
-		width, height := m.windowWidth-styleWidth-2*horizontalMargin, m.windowHeight-styleHeight-2*verticalMargin
-		modal := m.modals[len(m.modals)-1]
-		if modal, ok := modal.(Sizeable[tea.Model]); ok {
-			modal.SetSize(width, height)
+		width := m.windowWidth - 2*horizontalMargin
+		height := m.windowHeight - 2*verticalMargin
+		if sizeable, ok := modal.(overlay.Sizeable); ok {
+			modal = sizeable.SetSize(width, height).(overlay.ModalModel)
+			m.modals[i] = modal
 		}
+		width, height = modal.Size()
 
-		modalContent := lipgloss.NewStyle().
-			Width(width).MaxWidth(width).
-			Height(height).MaxHeight(height).
-			Render(modal.View())
-		modalContent = style.Render(modalContent)
-
-		return zone.Scan(overlay.Place(
-			horizontalMargin, verticalMargin,
-			modalContent, overlay.DimmBackground(board),
+		result = overlay.Place(
+			horizontalMargin+((m.windowWidth-2*horizontalMargin)-width)/2,
+			verticalMargin+((m.windowHeight-2*verticalMargin)-height)/2,
+			modal.View(), overlay.DimmBackground(result),
 			false,
-		))
-	} else {
-		return zone.Scan(board)
+		)
 	}
+	return zone.Scan(result)
 }

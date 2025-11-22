@@ -1,6 +1,7 @@
 package column
 
 import (
+	"github.com/Kavantix/kantui/internal/confirm"
 	"github.com/Kavantix/kantui/internal/ticket"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -106,6 +107,12 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			return m, nil
 		case "n":
 			return m, ticket.CreateTicket(m.store)
+		case "d":
+			item, ok := m.list.SelectedItem().(item)
+			if !ok {
+				return m, nil
+			}
+			return m, confirm.Show("Are you sure you want to delete?", m.store.DeleteTicket(item.ticket.ID))
 		case "e":
 			item, ok := m.list.SelectedItem().(item)
 			if !ok {

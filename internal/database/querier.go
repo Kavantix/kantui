@@ -10,6 +10,7 @@ import (
 
 type Querier interface {
 	AddTicket(ctx context.Context, arg AddTicketParams) (int64, error)
+	DeleteTicket(ctx context.Context, id int64) error
 	GetTicketById(ctx context.Context, id int64) (Ticket, error)
 	GetTickets(ctx context.Context) ([]Ticket, error)
 	UpdateStatus(ctx context.Context, arg UpdateStatusParams) error

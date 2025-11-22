@@ -26,3 +26,7 @@ set
   title = @title,
   description = @description
 where id = @id;
+
+-- name: DeleteTicket :exec
+delete from tickets
+where id = @id;

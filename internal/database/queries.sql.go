@@ -32,6 +32,16 @@ func (q *Queries) AddTicket(ctx context.Context, arg AddTicketParams) (int64, er
 	return id, err
 }
 
+const deleteTicket = `-- name: DeleteTicket :exec
+delete from tickets
+where id = ?1
+`
+
+func (q *Queries) DeleteTicket(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteTicket, id)
+	return err
+}
+
 const getTicketById = `-- name: GetTicketById :one
 SELECT id, title, description, status FROM tickets
 WHERE id = ?1 LIMIT 1
