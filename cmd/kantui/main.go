@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/Kavantix/kantui/internal/model"
+	"github.com/Kavantix/kantui/internal/app"
 	tea "github.com/charmbracelet/bubbletea"
 	zone "github.com/lrstanley/bubblezone"
 )
@@ -15,7 +15,7 @@ func main() {
 	defer zone.Close()
 
 	program := tea.NewProgram(
-		model.New(),
+		app.New(),
 		tea.WithAltScreen(),
 		tea.WithMouseAllMotion(),
 	)

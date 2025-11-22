@@ -1,4 +1,4 @@
-package model
+package app
 
 import (
 	"fmt"
@@ -13,7 +13,7 @@ import (
 	zone "github.com/lrstanley/bubblezone"
 )
 
-type Main struct {
+type Model struct {
 	store ticket.Store
 
 	windowWidth  int
@@ -23,10 +23,10 @@ type Main struct {
 	modals       []ModalModel
 }
 
-var _ tea.Model = Main{}
+var _ tea.Model = Model{}
 
-func New() Main {
-	m := Main{
+func New() Model {
+	m := Model{
 		store: ticket.NewStore(),
 	}
 	m.columns = []column.Model{}
@@ -38,13 +38,13 @@ func New() Main {
 }
 
 // Init implements tea.Model.
-func (m Main) Init() tea.Cmd {
+func (m Model) Init() tea.Cmd {
 
 	return nil
 }
 
 // Update implements tea.Model.
-func (m Main) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -152,7 +152,7 @@ func (m Main) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View implements tea.Model.
-func (m Main) View() string {
+func (m Model) View() string {
 	if m.quitting {
 		return "Goodbye!\n"
 	}
