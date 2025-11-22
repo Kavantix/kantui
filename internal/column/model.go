@@ -41,7 +41,6 @@ func New(status ticket.Status, store ticket.Store) Model {
 		status:   status,
 		list:     &listModel,
 	}
-
 	return m
 }
 

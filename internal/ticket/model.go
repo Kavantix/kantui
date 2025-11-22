@@ -1,6 +1,8 @@
 package ticket
 
 import (
+	"fmt"
+
 	"github.com/Kavantix/kantui/internal/messages"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -68,6 +70,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.titleInput.Focus()
 			}
 		case "ctrl+s":
+			if m.store == nil {
+				return m, func() tea.Msg {
+					return messages.CriticalFailureMsg{
+						Err: fmt.Errorf("store was not set"),
+					}
+				}
+			}
 			return m, tea.Batch(
 				m.store.New(
 					m.titleInput.Value(),

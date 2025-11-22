@@ -1,6 +1,8 @@
 package messages
 
-import tea "github.com/charmbracelet/bubbletea"
+import (
+	tea "github.com/charmbracelet/bubbletea"
+)
 
 type CloseModalMsg struct{}
 
@@ -12,4 +14,9 @@ type QuitMsg struct{}
 
 func Quit() tea.Msg {
 	return QuitMsg{}
+}
+
+type CriticalFailureMsg struct {
+	Err          error
+	FriendlyText string
 }

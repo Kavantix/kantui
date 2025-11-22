@@ -1,0 +1,10 @@
+version: "2"
+sql:
+  - engine: "sqlite"
+    queries: "queries.sql"
+    schema: "migrations"
+    gen:
+      go:
+        emit_interface: true
+        package: "database"
+        out: "."

@@ -5,8 +5,10 @@ import (
 	"log/slog"
 
 	"github.com/Kavantix/kantui/internal/column"
+	"github.com/Kavantix/kantui/internal/database"
 	"github.com/Kavantix/kantui/internal/messages"
 	"github.com/Kavantix/kantui/internal/ticket"
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	charmansi "github.com/charmbracelet/x/ansi"
@@ -14,45 +16,83 @@ import (
 )
 
 type Model struct {
-	store ticket.Store
-
+	spinner      spinner.Model
+	loaded       bool
 	windowWidth  int
 	windowHeight int
 	quitting     bool
 	columns      []column.Model
 	modals       []ModalModel
+
+	criticalFailure messages.CriticalFailureMsg
 }
 
 var _ tea.Model = Model{}
 
 func New() Model {
-	m := Model{
-		store: ticket.NewStore(),
-	}
-	m.columns = []column.Model{}
-	for _, status := range ticket.Statusses {
-		m.columns = append(m.columns, column.New(status, m.store))
-	}
-	m.columns[0].Focus()
+	m := Model{}
 	return m
+}
+
+type LoadedMsg struct {
+	TicketStore ticket.Store
 }
 
 // Init implements tea.Model.
 func (m Model) Init() tea.Cmd {
-
-	return nil
+	return func() tea.Msg {
+		err := database.Migrate()
+		if err != nil {
+			return messages.CriticalFailureMsg{
+				Err:          err,
+				FriendlyText: "Failed to migrate database",
+			}
+		}
+		db, err := database.OpenDb()
+		if err != nil {
+			return messages.CriticalFailureMsg{
+				Err:          err,
+				FriendlyText: "Failed to open database",
+			}
+		}
+		return LoadedMsg{
+			TicketStore: ticket.NewStore(database.New(db)),
+		}
+	}
 }
 
 // Update implements tea.Model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.criticalFailure.Err != nil {
+		return m, tea.Quit
+	}
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
+	case LoadedMsg:
+		m.columns = []column.Model{}
+		for _, status := range ticket.Statusses {
+			m.columns = append(m.columns, column.New(status, msg.TicketStore))
+		}
+		m.columns[0].Focus()
+		if m.windowWidth > 0 {
+			width := m.windowWidth / len(m.columns)
+			for _, column := range m.columns {
+				column.SetSize(width, m.windowHeight)
+			}
+		}
+		m.loaded = true
+		return m, msg.TicketStore.Load
+	case messages.CriticalFailureMsg:
+		m.criticalFailure = msg
+		return m, tea.ExitAltScreen
 	case tea.WindowSizeMsg:
 		m.windowWidth = msg.Width
 		m.windowHeight = msg.Height
-		width := msg.Width / len(m.columns)
-		for _, column := range m.columns {
-			column.SetSize(width, msg.Height)
+		if len(m.columns) > 0 {
+			width := msg.Width / len(m.columns)
+			for _, column := range m.columns {
+				column.SetSize(width, msg.Height)
+			}
 		}
 		return m, nil
 	case tea.MouseMsg:
@@ -155,6 +195,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) View() string {
 	if m.quitting {
 		return "Goodbye!\n"
+	}
+
+	if m.criticalFailure.Err != nil {
+		style := lipgloss.NewStyle().
+			Background(lipgloss.Color("9")).
+			Margin(1, 0)
+
+		title := "Failed"
+		if m.criticalFailure.FriendlyText != "" {
+			title = m.criticalFailure.FriendlyText
+		}
+		title = style.Render(title)
+		return lipgloss.JoinVertical(lipgloss.Left,
+			title,
+			lipgloss.NewStyle().
+				Width(m.windowWidth).
+				Render(m.criticalFailure.Err.Error()+"\n"),
+		)
+	}
+
+	if !m.loaded {
+		return m.spinner.View()
 	}
 
 	columns := []string{}
