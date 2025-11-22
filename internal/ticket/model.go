@@ -51,7 +51,7 @@ func (m *Model) EditTicket(ticket Ticket) {
 	m.descriptionInput.SetValue(string(ticket.Description))
 }
 
-func (m Model) SetSize(width, height int) tea.Model {
+func (m Model) SetSize(width, height int) overlay.ModalModel {
 	styleWidth, styleHeight := ticketStyle.GetFrameSize()
 	m.width = width
 	m.height = height

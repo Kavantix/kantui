@@ -22,7 +22,7 @@ type Model struct {
 	windowHeight int
 	quitting     bool
 	columns      []column.Model
-	modals       []overlay.ModalModel
+	overlay      overlay.Model
 
 	criticalFailure messages.CriticalFailureMsg
 }
@@ -94,10 +94,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				column.SetSize(width, msg.Height)
 			}
 		}
-		return m, nil
-	case overlay.ModalModel:
-		m.modals = append(m.modals, msg)
-		return m, nil
+		m.overlay, cmd = m.overlay.Update(msg)
+		return m, cmd
 	case tea.MouseMsg:
 		for i := 0; i < len(m.columns); i++ {
 			if zone.Get(fmt.Sprintf("column-%d", i)).InBounds(msg) {
@@ -113,35 +111,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case ticket.TicketsUpdatedMsg:
 		var cmds []tea.Cmd
-		for i, _ := range m.columns {
+		for i := range m.columns {
 			m.columns[i], cmd = m.columns[i].Update(msg)
 			cmds = append(cmds, cmd)
 		}
 		return m, tea.Batch(cmds...)
-	}
-
-	if len(m.modals) > 0 {
-		switch msg.(type) {
-		case messages.CloseModalMsg:
-			m.modals = m.modals[:len(m.modals)-1]
-			return m, nil
-		case messages.QuitMsg:
-			slog.Info("Quitting")
-			m.quitting = true
-			return m, tea.Quit
-		}
-		i := len(m.modals) - 1
-		model, cmd := m.modals[i].Update(msg)
-		m.modals[i] = model.(overlay.ModalModel)
-		return m, cmd
-	}
-
-	switch msg := msg.(type) {
-
 	case messages.QuitMsg:
 		slog.Info("Quitting")
 		m.quitting = true
 		return m, tea.Quit
+	}
+
+	m.overlay, cmd = m.overlay.Update(msg)
+	if m.overlay.Focused() || cmd != nil {
+		return m, cmd
+	}
+
+	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":
@@ -229,25 +215,5 @@ func (m Model) View() string {
 		columns...,
 	)
 
-	result := board
-	for i, modal := range m.modals {
-		horizontalMargin := 2
-		verticalMargin := 1
-
-		width := m.windowWidth - 2*horizontalMargin
-		height := m.windowHeight - 2*verticalMargin
-		if sizeable, ok := modal.(overlay.Sizeable); ok {
-			modal = sizeable.SetSize(width, height).(overlay.ModalModel)
-			m.modals[i] = modal
-		}
-		width, height = modal.Size()
-
-		result = overlay.Place(
-			horizontalMargin+((m.windowWidth-2*horizontalMargin)-width)/2,
-			verticalMargin+((m.windowHeight-2*verticalMargin)-height)/2,
-			modal.View(), overlay.DimmBackground(result),
-			false,
-		)
-	}
-	return zone.Scan(result)
+	return zone.Scan(m.overlay.View(board))
 }
