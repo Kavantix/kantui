@@ -96,3 +96,29 @@ func (q *Queries) UpdateStatus(ctx context.Context, arg UpdateStatusParams) erro
 	_, err := q.db.ExecContext(ctx, updateStatus, arg.Status, arg.ID)
 	return err
 }
+
+const updateTicket = `-- name: UpdateTicket :exec
+update tickets
+set
+  status = ?1,
+  title = ?2,
+  description = ?3
+where id = ?4
+`
+
+type UpdateTicketParams struct {
+	Status      string
+	Title       string
+	Description sql.NullString
+	ID          int64
+}
+
+func (q *Queries) UpdateTicket(ctx context.Context, arg UpdateTicketParams) error {
+	_, err := q.db.ExecContext(ctx, updateTicket,
+		arg.Status,
+		arg.Title,
+		arg.Description,
+		arg.ID,
+	)
+	return err
+}

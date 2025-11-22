@@ -21,9 +21,9 @@ type item struct {
 	ticket ticket.Ticket
 }
 
-func (i item) Title() string       { return i.ticket.Title }
-func (i item) Description() string { return i.ticket.Description }
-func (i item) FilterValue() string { return i.ticket.Title }
+func (i item) Title() string       { return string(i.ticket.Title) }
+func (i item) Description() string { return string(i.ticket.Description) }
+func (i item) FilterValue() string { return string(i.ticket.Title) }
 
 var defaultStyles = list.NewDefaultItemStyles()
 
@@ -106,6 +106,12 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			return m, nil
 		case "n":
 			return m, ticket.CreateTicket(m.store)
+		case "e":
+			item, ok := m.list.SelectedItem().(item)
+			if !ok {
+				return m, nil
+			}
+			return m, ticket.EditTicket(item.ticket, m.store)
 		case "b":
 			item, ok := m.list.SelectedItem().(item)
 			if !ok {

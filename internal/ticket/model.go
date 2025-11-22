@@ -37,6 +37,12 @@ func NewModel(store Store) Model {
 	}
 }
 
+func (m *Model) EditTicket(ticket Ticket) {
+	m.ticket = ticket
+	m.titleInput.SetValue(string(ticket.Title))
+	m.descriptionInput.SetValue(string(ticket.Description))
+}
+
 func (m Model) SetSize(width, height int) tea.Model {
 	m.width = width
 	m.height = height
@@ -77,12 +83,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 			}
-			return m, tea.Batch(
-				m.store.New(
-					m.titleInput.Value(),
-					m.descriptionInput.Value(),
-				), messages.CloseModal,
-			)
+
+			var save tea.Cmd
+			if m.ticket.ID.IsValid() {
+				save = m.store.UpdateTicket(
+					m.ticket.ID,
+					m.ticket.Status,
+					TicketTitle(m.titleInput.Value()),
+					TicketDescription(m.descriptionInput.Value()),
+				)
+			} else {
+				save = m.store.New(
+					TicketTitle(m.titleInput.Value()),
+					TicketDescription(m.descriptionInput.Value()),
+				)
+			}
+
+			return m, tea.Batch(save, messages.CloseModal)
 		}
 	}
 
@@ -101,7 +118,7 @@ func (m Model) OverlayTitle() string {
 	if !m.ticket.ID.IsValid() {
 		return "New"
 	} else {
-		return m.ticket.Title
+		return string(m.ticket.Title)
 	}
 }
 

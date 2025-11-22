@@ -13,6 +13,7 @@ type Querier interface {
 	GetTicketById(ctx context.Context, id int64) (Ticket, error)
 	GetTickets(ctx context.Context) ([]Ticket, error)
 	UpdateStatus(ctx context.Context, arg UpdateStatusParams) error
+	UpdateTicket(ctx context.Context, arg UpdateTicketParams) error
 }
 
 var _ Querier = (*Queries)(nil)

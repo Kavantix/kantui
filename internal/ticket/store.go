@@ -52,16 +52,20 @@ func (s Status) ColumnTitle() string {
 	}
 }
 
+type TicketTitle string
+type TicketDescription string
+
 type Ticket struct {
 	ID          TicketId
 	Status      Status
-	Title       string
-	Description string
+	Title       TicketTitle
+	Description TicketDescription
 }
 
 type Store interface {
 	Load() tea.Msg
-	New(title, description string) tea.Cmd
+	New(title TicketTitle, description TicketDescription) tea.Cmd
+	UpdateTicket(id TicketId, newStatus Status, newTitle TicketTitle, newDescription TicketDescription) tea.Cmd
 	UpdateStatus(id TicketId, newStatus Status) tea.Cmd
 	MoveToNextStatus(id TicketId) tea.Cmd
 	MoveToPreviousStatus(id TicketId) tea.Cmd
@@ -93,21 +97,21 @@ func (s *store) Load() tea.Msg {
 			Ticket{
 				ID:          TicketId{ticket.ID},
 				Status:      status.Parse(ticket.Status),
-				Title:       ticket.Title,
-				Description: ticket.Description.String,
+				Title:       TicketTitle(ticket.Title),
+				Description: TicketDescription(ticket.Description.String),
 			},
 		)
 	}
 	return TicketsUpdatedMsg{Tickets: s.tickets}
 }
 
-func (s *store) New(title, description string) tea.Cmd {
+func (s *store) New(title TicketTitle, description TicketDescription) tea.Cmd {
 	return func() tea.Msg {
 		id, err := s.queries.AddTicket(context.Background(), database.AddTicketParams{
-			Title: title,
+			Title: string(title),
 			Description: sql.NullString{
-				String: description,
-				Valid:  true,
+				String: string(description),
+				Valid:  description != "",
 			},
 		})
 		if err != nil {
@@ -125,6 +129,35 @@ func (s *store) New(title, description string) tea.Cmd {
 		)
 		return TicketsUpdatedMsg{s.tickets}
 	}
+}
+
+func (s *store) UpdateTicket(id TicketId, newStatus Status, newTitle TicketTitle, newDescription TicketDescription) tea.Cmd {
+	return func() tea.Msg {
+		for i, t := range s.tickets {
+			if t.ID == id {
+				err := s.queries.UpdateTicket(context.Background(), database.UpdateTicketParams{
+					ID:     id.number,
+					Status: newStatus.String(),
+					Title:  string(newTitle),
+					Description: sql.NullString{
+						String: string(newDescription),
+						Valid:  newDescription != "",
+					},
+				})
+				if err != nil {
+					return messages.CriticalFailureMsg{
+						Err:          err,
+						FriendlyText: "Failed to update ticket",
+					}
+				}
+				s.tickets[i].Status = newStatus
+				s.tickets[i].Title = newTitle
+				s.tickets[i].Description = newDescription
+			}
+		}
+		return TicketsUpdatedMsg{s.tickets}
+	}
+
 }
 
 func (s *store) UpdateStatus(id TicketId, newStatus Status) tea.Cmd {

@@ -13,3 +13,11 @@ func CreateTicket(store Store) tea.Cmd {
 		return NewModel(store)
 	}
 }
+
+func EditTicket(ticket Ticket, store Store) tea.Cmd {
+	return func() tea.Msg {
+		model := NewModel(store)
+		model.EditTicket(ticket)
+		return model
+	}
+}

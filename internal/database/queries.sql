@@ -18,3 +18,11 @@ returning id;
 update tickets
 set status = @status
 where id = @id;
+
+-- name: UpdateTicket :exec
+update tickets
+set
+  status = @status,
+  title = @title,
+  description = @description
+where id = @id;
