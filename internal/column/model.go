@@ -28,7 +28,7 @@ func (i item) Title() string {
 	return string(i.ticket.Title) + " " + ticket.IdStyle().Render(i.ticket.ID.String())
 }
 func (i item) Description() string { return string(i.ticket.Description) }
-func (i item) FilterValue() string { return string(i.ticket.Title) }
+func (i item) FilterValue() string { return string(i.ticket.Title) + " " + i.ticket.ID.String() }
 
 var defaultStyles = list.NewDefaultItemStyles()
 
