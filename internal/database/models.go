@@ -10,7 +10,8 @@ import (
 
 type Ticket struct {
 	ID          int64
+	Status      string
 	Title       string
 	Description sql.NullString
-	Status      string
+	Rank        int64
 }

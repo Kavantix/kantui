@@ -142,7 +142,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.ticket.ID.IsValid() {
 				save = m.store.UpdateTicket(
 					m.ticket.ID,
-					m.ticket.Status,
 					m.ticketTitle(),
 					m.ticketDescription(),
 				)

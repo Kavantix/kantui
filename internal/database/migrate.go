@@ -32,9 +32,9 @@ func Migrate() error {
 	if err = goose.SetDialect(string(goose.DialectSQLite3)); err != nil {
 		return fmt.Errorf("failed setting up database dialect: %w", err)
 	}
-	// if err := goose.Down(db, "migrations"); err != nil {
-	// 	return fmt.Errorf("down migrations failed: %w", err)
-	// }
+	if err := goose.Down(db, "migrations"); err != nil {
+		return fmt.Errorf("down migrations failed: %w", err)
+	}
 
 	if err := goose.Up(db, "migrations"); err != nil {
 		return fmt.Errorf("up migrations failed: %w", err)

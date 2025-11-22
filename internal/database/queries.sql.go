@@ -12,12 +12,12 @@ import (
 
 const addTicket = `-- name: AddTicket :one
 insert into tickets (
-  title, description
+  title, description, rank
 )
 values (
-  ?1, ?2
+  ?1, ?2, (select coalesce(max(rank) + 1000000, 0) from tickets)
 )
-returning id
+returning id, rank
 `
 
 type AddTicketParams struct {
@@ -25,11 +25,16 @@ type AddTicketParams struct {
 	Description sql.NullString
 }
 
-func (q *Queries) AddTicket(ctx context.Context, arg AddTicketParams) (int64, error) {
+type AddTicketRow struct {
+	ID   int64
+	Rank int64
+}
+
+func (q *Queries) AddTicket(ctx context.Context, arg AddTicketParams) (AddTicketRow, error) {
 	row := q.db.QueryRowContext(ctx, addTicket, arg.Title, arg.Description)
-	var id int64
-	err := row.Scan(&id)
-	return id, err
+	var i AddTicketRow
+	err := row.Scan(&i.ID, &i.Rank)
+	return i, err
 }
 
 const deleteTicket = `-- name: DeleteTicket :exec
@@ -43,7 +48,7 @@ func (q *Queries) DeleteTicket(ctx context.Context, id int64) error {
 }
 
 const getTicketById = `-- name: GetTicketById :one
-SELECT id, title, description, status FROM tickets
+SELECT id, status, title, description, rank FROM tickets
 WHERE id = ?1 LIMIT 1
 `
 
@@ -52,15 +57,17 @@ func (q *Queries) GetTicketById(ctx context.Context, id int64) (Ticket, error) {
 	var i Ticket
 	err := row.Scan(
 		&i.ID,
+		&i.Status,
 		&i.Title,
 		&i.Description,
-		&i.Status,
+		&i.Rank,
 	)
 	return i, err
 }
 
 const getTickets = `-- name: GetTickets :many
-SELECT id, title, description, status FROM tickets
+SELECT id, status, title, description, rank FROM tickets
+order by rank, id
 `
 
 func (q *Queries) GetTickets(ctx context.Context) ([]Ticket, error) {
@@ -74,9 +81,10 @@ func (q *Queries) GetTickets(ctx context.Context) ([]Ticket, error) {
 		var i Ticket
 		if err := rows.Scan(
 			&i.ID,
+			&i.Status,
 			&i.Title,
 			&i.Description,
-			&i.Status,
+			&i.Rank,
 		); err != nil {
 			return nil, err
 		}
@@ -89,6 +97,22 @@ func (q *Queries) GetTickets(ctx context.Context) ([]Ticket, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateRank = `-- name: UpdateRank :exec
+update tickets
+set rank = ?1
+where id = ?2
+`
+
+type UpdateRankParams struct {
+	Rank int64
+	ID   int64
+}
+
+func (q *Queries) UpdateRank(ctx context.Context, arg UpdateRankParams) error {
+	_, err := q.db.ExecContext(ctx, updateRank, arg.Rank, arg.ID)
+	return err
 }
 
 const updateStatus = `-- name: UpdateStatus :exec
@@ -107,28 +131,21 @@ func (q *Queries) UpdateStatus(ctx context.Context, arg UpdateStatusParams) erro
 	return err
 }
 
-const updateTicket = `-- name: UpdateTicket :exec
+const updateTicketContent = `-- name: UpdateTicketContent :exec
 update tickets
 set
-  status = ?1,
-  title = ?2,
-  description = ?3
-where id = ?4
+  title = ?1,
+  description = ?2
+where id = ?3
 `
 
-type UpdateTicketParams struct {
-	Status      string
+type UpdateTicketContentParams struct {
 	Title       string
 	Description sql.NullString
 	ID          int64
 }
 
-func (q *Queries) UpdateTicket(ctx context.Context, arg UpdateTicketParams) error {
-	_, err := q.db.ExecContext(ctx, updateTicket,
-		arg.Status,
-		arg.Title,
-		arg.Description,
-		arg.ID,
-	)
+func (q *Queries) UpdateTicketContent(ctx context.Context, arg UpdateTicketContentParams) error {
+	_, err := q.db.ExecContext(ctx, updateTicketContent, arg.Title, arg.Description, arg.ID)
 	return err
 }

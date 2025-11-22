@@ -88,13 +88,31 @@ func (m Model) SetSize(width, height int) {
 }
 
 func (m Model) setTickets(tickets []ticket.Ticket) tea.Cmd {
+	var selectedTicketId ticket.TicketId
+	visibleItems := m.list.VisibleItems()
+	selectedIndex := m.list.Index()
+	if len(visibleItems) > 0 {
+		if selectedIndex >= 0 && selectedIndex < len(visibleItems) {
+			ticket := visibleItems[selectedIndex].(item).ticket
+			selectedTicketId = ticket.ID
+		}
+	}
+
 	var items []list.Item
+	var newSelectedIndex = selectedIndex
 	for _, ticket := range tickets {
 		if ticket.Status == m.status {
+			if ticket.ID == selectedTicketId {
+				newSelectedIndex = len(items)
+			}
 			items = append(items, item{ticket: ticket})
 		}
 	}
-	return m.list.SetItems(items)
+	cmd := m.list.SetItems(items)
+	if newSelectedIndex != selectedIndex {
+		m.list.Select(newSelectedIndex)
+	}
+	return cmd
 }
 
 // Update implements tea.Model.
@@ -142,6 +160,42 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				return m, nil
 			}
 			return m, m.store.MoveToNextStatus(item.ticket.ID)
+		case "J", "shift+down":
+			visibleItems := m.list.VisibleItems()
+			index := m.list.Index()
+			if index < 0 || index >= len(visibleItems)-1 {
+				return m, nil
+			}
+			ticket := visibleItems[index].(item).ticket
+			nextTicket := visibleItems[index+1].(item).ticket
+			return m, m.store.RankTicketAfterTicket(ticket.ID, nextTicket.ID)
+		case "B":
+			visibleItems := m.list.VisibleItems()
+			index := m.list.Index()
+			if index >= len(visibleItems)-1 {
+				return m, nil
+			}
+			ticket := visibleItems[index].(item).ticket
+			afterTicket := visibleItems[len(visibleItems)-1].(item).ticket
+			return m, m.store.RankTicketAfterTicket(ticket.ID, afterTicket.ID)
+		case "K", "shift+up":
+			visibleItems := m.list.VisibleItems()
+			index := m.list.Index()
+			if index < 1 || index > len(visibleItems)-1 {
+				return m, nil
+			}
+			ticket := visibleItems[index].(item).ticket
+			previousTicket := visibleItems[index-1].(item).ticket
+			return m, m.store.RankTicketBeforeTicket(ticket.ID, previousTicket.ID)
+		case "T":
+			index := m.list.Index()
+			if index <= 0 {
+				return m, nil
+			}
+			visibleItems := m.list.VisibleItems()
+			ticket := visibleItems[index].(item).ticket
+			beforeTicket := visibleItems[0].(item).ticket
+			return m, m.store.RankTicketBeforeTicket(ticket.ID, beforeTicket.ID)
 		}
 	}
 	newListModel, cmd := m.list.Update(msg)

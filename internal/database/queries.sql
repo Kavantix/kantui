@@ -3,26 +3,31 @@ SELECT * FROM tickets
 WHERE id = @id LIMIT 1;
 
 -- name: GetTickets :many
-SELECT * FROM tickets;
+SELECT * FROM tickets
+order by rank, id;
 
 -- name: AddTicket :one
 insert into tickets (
-  title, description
+  title, description, rank
 )
 values (
-  @title, @description
+  @title, @description, (select coalesce(max(rank) + 1000000, 0) from tickets)
 )
-returning id;
+returning id, rank;
 
 -- name: UpdateStatus :exec
 update tickets
 set status = @status
 where id = @id;
 
--- name: UpdateTicket :exec
+-- name: UpdateRank :exec
+update tickets
+set rank = @rank
+where id = @id;
+
+-- name: UpdateTicketContent :exec
 update tickets
 set
-  status = @status,
   title = @title,
   description = @description
 where id = @id;

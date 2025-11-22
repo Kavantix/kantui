@@ -9,12 +9,13 @@ import (
 )
 
 type Querier interface {
-	AddTicket(ctx context.Context, arg AddTicketParams) (int64, error)
+	AddTicket(ctx context.Context, arg AddTicketParams) (AddTicketRow, error)
 	DeleteTicket(ctx context.Context, id int64) error
 	GetTicketById(ctx context.Context, id int64) (Ticket, error)
 	GetTickets(ctx context.Context) ([]Ticket, error)
+	UpdateRank(ctx context.Context, arg UpdateRankParams) error
 	UpdateStatus(ctx context.Context, arg UpdateStatusParams) error
-	UpdateTicket(ctx context.Context, arg UpdateTicketParams) error
+	UpdateTicketContent(ctx context.Context, arg UpdateTicketContentParams) error
 }
 
 var _ Querier = (*Queries)(nil)

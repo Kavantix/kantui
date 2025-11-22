@@ -23,6 +23,9 @@ func (i TicketId) IsValid() bool {
 }
 
 func (i TicketId) String() string {
+	if i.number <= 0 {
+		return "INVALID"
+	}
 	return fmt.Sprintf("TK-%d", i.number)
 }
 
@@ -58,6 +61,7 @@ type TicketDescription string
 
 type Ticket struct {
 	ID          TicketId
+	rank        int64
 	Status      Status
 	Title       TicketTitle
 	Description TicketDescription
@@ -66,8 +70,10 @@ type Ticket struct {
 type Store interface {
 	Load() tea.Msg
 	New(title TicketTitle, description TicketDescription) tea.Cmd
-	UpdateTicket(id TicketId, newStatus Status, newTitle TicketTitle, newDescription TicketDescription) tea.Cmd
+	UpdateTicket(id TicketId, newTitle TicketTitle, newDescription TicketDescription) tea.Cmd
 	UpdateStatus(id TicketId, newStatus Status) tea.Cmd
+	RankTicketAfterTicket(id, afterId TicketId) tea.Cmd
+	RankTicketBeforeTicket(id, beforeId TicketId) tea.Cmd
 	MoveToNextStatus(id TicketId) tea.Cmd
 	MoveToPreviousStatus(id TicketId) tea.Cmd
 	DeleteTicket(id TicketId) tea.Cmd
@@ -99,6 +105,7 @@ func (s *store) Load() tea.Msg {
 			Ticket{
 				ID:          TicketId{ticket.ID},
 				Status:      status.Parse(ticket.Status),
+				rank:        ticket.Rank,
 				Title:       TicketTitle(ticket.Title),
 				Description: TicketDescription(ticket.Description.String),
 			},
@@ -109,7 +116,7 @@ func (s *store) Load() tea.Msg {
 
 func (s *store) New(title TicketTitle, description TicketDescription) tea.Cmd {
 	return func() tea.Msg {
-		id, err := s.queries.AddTicket(context.Background(), database.AddTicketParams{
+		row, err := s.queries.AddTicket(context.Background(), database.AddTicketParams{
 			Title: string(title),
 			Description: sql.NullString{
 				String: string(description),
@@ -124,7 +131,8 @@ func (s *store) New(title TicketTitle, description TicketDescription) tea.Cmd {
 		}
 		s.tickets = append(s.tickets,
 			Ticket{
-				ID:          TicketId{id},
+				ID:          TicketId{row.ID},
+				rank:        row.Rank,
 				Title:       title,
 				Description: description,
 			},
@@ -133,14 +141,13 @@ func (s *store) New(title TicketTitle, description TicketDescription) tea.Cmd {
 	}
 }
 
-func (s *store) UpdateTicket(id TicketId, newStatus Status, newTitle TicketTitle, newDescription TicketDescription) tea.Cmd {
+func (s *store) UpdateTicket(id TicketId, newTitle TicketTitle, newDescription TicketDescription) tea.Cmd {
 	return func() tea.Msg {
 		for i, t := range s.tickets {
 			if t.ID == id {
-				err := s.queries.UpdateTicket(context.Background(), database.UpdateTicketParams{
-					ID:     id.number,
-					Status: newStatus.String(),
-					Title:  string(newTitle),
+				err := s.queries.UpdateTicketContent(context.Background(), database.UpdateTicketContentParams{
+					ID:    id.number,
+					Title: string(newTitle),
 					Description: sql.NullString{
 						String: string(newDescription),
 						Valid:  newDescription != "",
@@ -152,7 +159,6 @@ func (s *store) UpdateTicket(id TicketId, newStatus Status, newTitle TicketTitle
 						FriendlyText: "Failed to update ticket",
 					}
 				}
-				s.tickets[i].Status = newStatus
 				s.tickets[i].Title = newTitle
 				s.tickets[i].Description = newDescription
 			}
@@ -182,6 +188,100 @@ func (s *store) UpdateStatus(id TicketId, newStatus Status) tea.Cmd {
 		return TicketsUpdatedMsg{s.tickets}
 	}
 
+}
+
+func (s *store) RankTicketAfterTicket(id, afterId TicketId) tea.Cmd {
+	return func() tea.Msg {
+		index := slices.IndexFunc(s.tickets, func(ticket Ticket) bool { return ticket.ID == id })
+		afterIndex := slices.IndexFunc(s.tickets, func(ticket Ticket) bool { return ticket.ID == afterId })
+		if index >= afterIndex {
+			return messages.CriticalFailureMsg{
+				Err: fmt.Errorf("Ranking after should only be used when ticket is not already after other ticket"),
+			}
+		}
+		if afterIndex < 0 || index < 0 {
+			return nil
+		}
+		ticket := s.tickets[index]
+		afterTicket := s.tickets[afterIndex]
+
+		var newRank int64
+		if afterIndex == len(s.tickets)-1 {
+			newRank = afterTicket.rank + 1_000_000
+		} else {
+			nextTicket := s.tickets[afterIndex+1]
+			gap := nextTicket.rank - afterTicket.rank
+			if gap <= 1 {
+				return messages.CriticalFailureMsg{
+					Err:          fmt.Errorf("ran out of room between tickets"),
+					FriendlyText: "Failed to update rank",
+				}
+			}
+			newRank = afterTicket.rank + gap/2
+		}
+
+		err := s.queries.UpdateRank(context.Background(), database.UpdateRankParams{
+			ID:   id.number,
+			Rank: newRank,
+		})
+		if err != nil {
+			return messages.CriticalFailureMsg{
+				Err:          err,
+				FriendlyText: "Failed to update rank",
+			}
+		}
+		ticket.rank = newRank
+		s.tickets = slices.Insert(s.tickets, afterIndex+1, ticket)
+		s.tickets = slices.Delete(s.tickets, index, index+1)
+		return TicketsUpdatedMsg{s.tickets}
+	}
+}
+
+func (s *store) RankTicketBeforeTicket(id, beforeId TicketId) tea.Cmd {
+	return func() tea.Msg {
+		index := slices.IndexFunc(s.tickets, func(ticket Ticket) bool { return ticket.ID == id })
+		beforeIndex := slices.IndexFunc(s.tickets, func(ticket Ticket) bool { return ticket.ID == beforeId })
+		if index <= beforeIndex {
+			return messages.CriticalFailureMsg{
+				Err: fmt.Errorf("Ranking before should only be used when ticket is not already before other ticket"),
+			}
+		}
+		if beforeIndex < 0 || index < 0 {
+			return nil
+		}
+		ticket := s.tickets[index]
+		beforeTicket := s.tickets[beforeIndex]
+
+		var newRank int64
+		if beforeIndex == 0 {
+			newRank = beforeTicket.rank - 1_000_000
+		} else {
+			previousTicket := s.tickets[beforeIndex-1]
+			gap := beforeTicket.rank - previousTicket.rank
+			if gap <= 1 {
+				return messages.CriticalFailureMsg{
+					Err:          fmt.Errorf("ran out of room between tickets"),
+					FriendlyText: "Failed to update rank",
+				}
+			}
+			newRank = beforeTicket.rank - gap/2
+		}
+
+		err := s.queries.UpdateRank(context.Background(), database.UpdateRankParams{
+			ID:   id.number,
+			Rank: newRank,
+		})
+		if err != nil {
+			return messages.CriticalFailureMsg{
+				Err:          err,
+				FriendlyText: "Failed to update rank",
+			}
+		}
+		ticket.rank = newRank
+		s.tickets = slices.Delete(s.tickets, index, index+1)
+		s.tickets = slices.Insert(s.tickets, beforeIndex, ticket)
+		return TicketsUpdatedMsg{s.tickets}
+	}
 }
 
 func (s *store) MoveToPreviousStatus(id TicketId) tea.Cmd {
