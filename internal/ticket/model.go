@@ -60,6 +60,11 @@ func (m *Model) EditTicket(ticket Ticket) {
 }
 
 func (m Model) SetSize(width, height int) overlay.ModalModel {
+	const maxWidth = 120
+	if width > maxWidth {
+		width = maxWidth
+	}
+
 	styleWidth, styleHeight := ticketStyle.GetFrameSize()
 	m.width = width
 	m.height = height
