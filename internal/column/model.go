@@ -1,23 +1,32 @@
 package column
 
 import (
+	"fmt"
+	"io"
 	"strings"
+	"time"
 
 	"github.com/Kavantix/kantui/internal/confirm"
 	"github.com/Kavantix/kantui/internal/ticket"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	zone "github.com/lrstanley/bubblezone"
 )
 
 type Model struct {
 	store ticket.Store
 
-	delegate *list.DefaultDelegate
+	delegate *listDelegate
 
 	status  ticket.Status
 	focused bool
 	list    *list.Model
+
+	lastClick *struct {
+		ticketId ticket.TicketId
+		at       time.Time
+	}
 }
 
 type item struct {
@@ -25,15 +34,29 @@ type item struct {
 }
 
 func (i item) Title() string {
-	return string(i.ticket.Title) + " " + ticket.IdStyle().Render(i.ticket.ID.String())
+	return string(i.ticket.Title) + " " + i.ticket.ID.String()
 }
 func (i item) Description() string { return string(i.ticket.Description) }
 func (i item) FilterValue() string { return string(i.ticket.Title) + " " + i.ticket.ID.String() }
 
 var defaultStyles = list.NewDefaultItemStyles()
 
+type listDelegate struct {
+	list.DefaultDelegate
+	width int
+}
+
+func (d listDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
+	buffer := strings.Builder{}
+	d.DefaultDelegate.Render(&buffer, m, index, listItem)
+	id := listItem.(item).ticket.ID.String()
+	content := buffer.String()
+	content = strings.Replace(content, id, ticket.IdStyle().Render(id), 1)
+	fmt.Fprint(w, zone.Mark(id, lipgloss.NewStyle().Width(d.width).Render(content)))
+}
+
 func New(status ticket.Status, store ticket.Store) Model {
-	delegate := list.NewDefaultDelegate()
+	delegate := listDelegate{list.NewDefaultDelegate(), 0}
 	listModel := list.New(
 		[]list.Item{},
 		&delegate, 0, 0,
@@ -85,6 +108,7 @@ var (
 func (m Model) SetSize(width, height int) {
 	styleX, styleY := style.GetFrameSize()
 	m.list.SetSize(width-styleX, height-styleY)
+	m.delegate.width = width - styleX
 }
 
 func (m Model) setTickets(tickets []ticket.Ticket) tea.Cmd {
@@ -120,6 +144,41 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case ticket.TicketsUpdatedMsg:
 		return m, m.setTickets(msg.Tickets)
+	case tea.MouseMsg:
+		if msg.Action == tea.MouseActionPress {
+			newListModel := *m.list
+			var cmd tea.Cmd
+			switch msg.Button {
+			case tea.MouseButtonWheelDown:
+				newListModel, cmd = m.list.Update(tea.KeyMsg{Type: tea.KeyDown})
+			case tea.MouseButtonWheelUp:
+				newListModel, cmd = m.list.Update(tea.KeyMsg{Type: tea.KeyUp})
+			case tea.MouseButtonLeft:
+				visibleItems := newListModel.VisibleItems()
+				for i, listItem := range visibleItems {
+					item := listItem.(item)
+					if zone.Get(item.ticket.ID.String()).InBounds(msg) {
+						newListModel.Select(i)
+						if m.lastClick != nil &&
+							m.lastClick.ticketId == item.ticket.ID &&
+							time.Since(m.lastClick.at) < 500*time.Millisecond {
+							m.lastClick = nil
+							return m, ticket.EditTicket(item.ticket, m.store)
+						} else {
+							m.lastClick = &struct {
+								ticketId ticket.TicketId
+								at       time.Time
+							}{
+								item.ticket.ID, time.Now(),
+							}
+						}
+						break
+					}
+				}
+			}
+			m.list = &newListModel
+			return m, cmd
+		}
 	case tea.KeyMsg:
 		if m.IsCapturingInput() {
 			break
@@ -213,8 +272,14 @@ func (m Model) View() string {
 		m.delegate.Styles.SelectedTitle = defaultStyles.SelectedTitle
 		m.delegate.Styles.SelectedDesc = defaultStyles.SelectedDesc
 	} else {
-		m.delegate.Styles.SelectedTitle = defaultStyles.NormalTitle
-		m.delegate.Styles.SelectedDesc = defaultStyles.NormalDesc
+		m.delegate.Styles.SelectedTitle = defaultStyles.SelectedTitle.
+			BorderForeground(lipgloss.Color("33")).
+			Foreground(lipgloss.Color("248"))
+
+		m.delegate.Styles.SelectedDesc = defaultStyles.SelectedDesc.
+			BorderForeground(lipgloss.Color("68")).
+			Foreground(defaultStyles.NormalDesc.GetForeground())
+		m.delegate.Styles.NormalTitle = defaultStyles.NormalTitle.Foreground(lipgloss.Color("248"))
 	}
 	return style.
 		Width(m.list.Width()).

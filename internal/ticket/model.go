@@ -2,7 +2,6 @@ package ticket
 
 import (
 	"fmt"
-	"log/slog"
 	"strings"
 
 	"github.com/Kavantix/kantui/internal/confirm"
@@ -74,7 +73,6 @@ func (m Model) SetSize(width, height int) overlay.ModalModel {
 	height -= styleHeight
 	titleWidth := width - 2
 	if titleWidth != m.titleInput.Width {
-		slog.Info("Setting size", slog.Int("width", width), slog.Int("height", height))
 		newTitleInput := textinput.New()
 		if m.titleInput.Focused() {
 			newTitleInput.Focus()

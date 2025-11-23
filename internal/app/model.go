@@ -103,14 +103,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseMsg:
 		for i := 0; i < len(m.columns); i++ {
 			if zone.Get(fmt.Sprintf("column-%d", i)).InBounds(msg) {
+				m.columns[i], cmd = m.columns[i].Update(msg)
+
 				if msg.Action != tea.MouseActionPress || msg.Button != 1 {
-					return m, nil
+					return m, cmd
 				}
 				for j := 0; j < len(m.columns); j++ {
 					m.columns[j].Unfocus()
 				}
 				m.columns[i].Focus()
-				return m, nil
+				return m, cmd
 			}
 		}
 	case ticket.TicketsUpdatedMsg:
