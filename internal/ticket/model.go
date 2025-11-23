@@ -40,7 +40,8 @@ func NewModel(store Store) Model {
 	titleInput := textinput.New()
 	titleInput.Focus()
 	titleInput.Width = 1000
-	titleInput.Placeholder = "Enter title"
+	titleInput.Placeholder = "New ticket"
+	titleInput.Prompt = ""
 
 	descriptionInput := textarea.New()
 	descriptionInput.Placeholder = "Enter a description"
@@ -72,6 +73,9 @@ func (m Model) SetSize(width, height int) overlay.ModalModel {
 	width -= styleWidth + 2
 	height -= styleHeight
 	titleWidth := width - 2
+	if m.ticket.ID.IsValid() {
+		titleWidth = width - 8
+	}
 	if titleWidth != m.titleInput.Width {
 		newTitleInput := textinput.New()
 		if m.titleInput.Focused() {
@@ -79,6 +83,7 @@ func (m Model) SetSize(width, height int) overlay.ModalModel {
 		}
 		newTitleInput.SetValue(m.titleInput.Value())
 		newTitleInput.Width = titleWidth
+		newTitleInput.Prompt = ""
 		newTitleInput.Placeholder = m.titleInput.Placeholder
 		m.titleInput = &newTitleInput
 	}
@@ -172,14 +177,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) modalTitle() string {
 	titleBuilder := strings.Builder{}
-	if !m.ticket.ID.IsValid() {
-		return "New ticket"
-	} else {
+	if m.ticket.ID.IsValid() {
 		titleBuilder.WriteString(idStyle.Render(m.ticket.ID.String()))
 		titleBuilder.WriteRune(' ')
-		titleBuilder.WriteString(string(m.ticket.Title))
-		return titleBuilder.String()
 	}
+	value := m.titleInput.Value()
+	maxWidth := lipgloss.Width(value)
+	if value == "" {
+		maxWidth = lipgloss.Width(m.titleInput.Placeholder)
+	}
+	if m.titleInput.Focused() {
+		maxWidth += 1
+	}
+	titleBuilder.WriteString(lipgloss.NewStyle().
+		MaxWidth(maxWidth).
+		Render(m.titleInput.View()))
+	return titleBuilder.String()
 }
 
 var ticketStyle = lipgloss.NewStyle().
@@ -197,7 +210,6 @@ func (m Model) View() string {
 	}
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
-		m.titleInput.View(),
 		"Description",
 		m.descriptionInput.View(),
 	)
