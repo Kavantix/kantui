@@ -57,6 +57,8 @@ func (m *Model) EditTicket(ticket Ticket) {
 	m.ticket = ticket
 	m.titleInput.SetValue(string(ticket.Title))
 	m.descriptionInput.SetValue(string(ticket.Description))
+	m.titleInput.Blur()
+	m.descriptionInput.Focus()
 }
 
 func (m Model) SetSize(width, height int) overlay.ModalModel {
