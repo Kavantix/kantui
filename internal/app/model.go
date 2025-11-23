@@ -6,6 +6,7 @@ import (
 
 	"github.com/Kavantix/kantui/internal/column"
 	"github.com/Kavantix/kantui/internal/database"
+	"github.com/Kavantix/kantui/internal/flags"
 	"github.com/Kavantix/kantui/internal/messages"
 	"github.com/Kavantix/kantui/internal/overlay"
 	"github.com/Kavantix/kantui/internal/ticket"
@@ -26,14 +27,14 @@ type Model struct {
 
 	criticalFailure messages.CriticalFailureMsg
 
-	remigrateCount int
+	flags *flags.Context
 }
 
 var _ tea.Model = Model{}
 
-func New(remigrateCount int) Model {
+func New(flags *flags.Context) Model {
 	m := Model{
-		remigrateCount: remigrateCount,
+		flags: flags,
 	}
 	return m
 }
@@ -45,7 +46,7 @@ type LoadedMsg struct {
 // Init implements tea.Model.
 func (m Model) Init() tea.Cmd {
 	return func() tea.Msg {
-		err := database.Migrate(m.remigrateCount)
+		err := database.Migrate(m.flags.RemigrateCount())
 		if err != nil {
 			return messages.CriticalFailureMsg{
 				Err:          err,
