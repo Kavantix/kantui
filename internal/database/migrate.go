@@ -14,10 +14,6 @@ import (
 //go:embed migrations/*.sql
 var embedMigrations embed.FS
 
-func OpenDb() (*sql.DB, error) {
-	return sql.Open("sqlite", "kantui.sqlite3")
-}
-
 type gooseLogger struct{}
 
 // Fatalf implements goose.Logger.
@@ -41,8 +37,8 @@ func (g gooseLogger) Printf(format string, v ...any) {
 	slog.Info(msg, args...)
 }
 
-func Migrate(remigrateCount int) error {
-	db, err := OpenDb()
+func Migrate(file string, remigrateCount int) error {
+	db, err := openDb(file)
 	if err != nil {
 		return fmt.Errorf("failed to open database connection: %w", err)
 	}

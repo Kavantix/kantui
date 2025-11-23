@@ -82,18 +82,18 @@ type Store interface {
 
 type store struct {
 	tickets []Ticket
-	queries database.Querier
+	db      database.Connection
 }
 
-func NewStore(queries database.Querier) Store {
+func NewStore(db database.Connection) Store {
 	s := &store{
-		queries: queries,
+		db: db,
 	}
 	return s
 }
 
 func (s *store) Load() tea.Msg {
-	tickets, err := s.queries.GetTickets(context.Background())
+	tickets, err := s.db.GetTickets(context.Background())
 	if err != nil {
 		return messages.CriticalFailureMsg{
 			Err:          err,
@@ -117,7 +117,7 @@ func (s *store) Load() tea.Msg {
 
 func (s *store) New(title TicketTitle, description TicketDescription) tea.Cmd {
 	return func() tea.Msg {
-		row, err := s.queries.AddTicket(context.Background(), database.AddTicketParams{
+		row, err := s.db.AddTicket(context.Background(), database.AddTicketParams{
 			Title: string(title),
 			Description: sql.NullString{
 				String: string(description),
@@ -146,7 +146,7 @@ func (s *store) UpdateTicket(id TicketId, newTitle TicketTitle, newDescription T
 	return func() tea.Msg {
 		for i, t := range s.tickets {
 			if t.ID == id {
-				err := s.queries.UpdateTicketContent(context.Background(), database.UpdateTicketContentParams{
+				err := s.db.UpdateTicketContent(context.Background(), database.UpdateTicketContentParams{
 					ID:    id.number,
 					Title: string(newTitle),
 					Description: sql.NullString{
@@ -173,7 +173,7 @@ func (s *store) UpdateStatus(id TicketId, newStatus Status) tea.Cmd {
 	return func() tea.Msg {
 		for i, t := range s.tickets {
 			if t.ID == id {
-				err := s.queries.UpdateStatus(context.Background(), database.UpdateStatusParams{
+				err := s.db.UpdateStatus(context.Background(), database.UpdateStatusParams{
 					ID:     id.number,
 					Status: newStatus.String(),
 				})
@@ -243,7 +243,7 @@ func (s *store) rankTicket(currentIndex, newIndex int) tea.Msg {
 	ticket := s.tickets[currentIndex]
 
 	// Update database
-	err = s.queries.UpdateRank(context.Background(), database.UpdateRankParams{
+	err = s.db.UpdateRank(context.Background(), database.UpdateRankParams{
 		ID:   ticket.ID.number,
 		Rank: newRank,
 	})
@@ -365,7 +365,7 @@ func (s *store) MoveToNextStatus(id TicketId) tea.Cmd {
 
 func (s *store) DeleteTicket(id TicketId) tea.Cmd {
 	return func() tea.Msg {
-		err := s.queries.DeleteTicket(context.Background(), id.number)
+		err := s.db.DeleteTicket(context.Background(), id.number)
 		if err != nil {
 			return messages.CriticalFailureMsg{
 				Err:          err,

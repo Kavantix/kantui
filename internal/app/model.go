@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"log/slog"
+	"path"
 
 	"github.com/Kavantix/kantui/internal/column"
 	"github.com/Kavantix/kantui/internal/database"
@@ -46,14 +47,18 @@ type LoadedMsg struct {
 // Init implements tea.Model.
 func (m Model) Init() tea.Cmd {
 	return func() tea.Msg {
-		err := database.Migrate(m.flags.RemigrateCount())
+		dbFile := "kantui.sqlite3"
+		if m.flags.DbFolder() != "" {
+			dbFile = path.Join(m.flags.DbFolder(), dbFile)
+		}
+		err := database.Migrate(dbFile, m.flags.RemigrateCount())
 		if err != nil {
 			return messages.CriticalFailureMsg{
 				Err:          err,
 				FriendlyText: "Failed to migrate database",
 			}
 		}
-		db, err := database.OpenDb()
+		db, err := database.Open(dbFile)
 		if err != nil {
 			return messages.CriticalFailureMsg{
 				Err:          err,
@@ -61,7 +66,7 @@ func (m Model) Init() tea.Cmd {
 			}
 		}
 		return LoadedMsg{
-			TicketStore: ticket.NewStore(database.New(db)),
+			TicketStore: ticket.NewStore(db),
 		}
 	}
 }
